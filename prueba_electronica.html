@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de Electrónica Básica</title>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --text:#1c2333; --muted:#5b6478; --accent:#2f6fed; --ok:#1e9e5a; --bad:#d33; --border:#d9deea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161f; --card:#1c2230; --text:#e8ecf5; --muted:#9aa4ba; --accent:#6c9bff; --ok:#3fc27f; --bad:#ff6b6b; --border:#2c3548; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Arial,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; user-select:none; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:16px; }
+  h1 { margin:0 0 8px; font-size:1.6rem; }
+  p, li { line-height:1.5; color:var(--muted); }
+  input[type=text] { width:100%; padding:10px; font-size:1rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); user-select:text; }
+  button { background:var(--accent); color:#fff; border:0; padding:12px 22px; font-size:1rem; border-radius:8px; cursor:pointer; margin-top:12px; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .top { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-weight:600; }
+  .warn { color:var(--bad); }
+  .q { margin-bottom:22px; }
+  .q h3 { font-size:1.05rem; margin:0 0 10px; color:var(--text); }
+  label.opt { display:block; padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; color:var(--text); }
+  label.opt:hover { border-color:var(--accent); }
+  .hidden { display:none !important; }
+  #pausa { position:fixed; inset:0; background:rgba(10,14,24,.96); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:99; }
+  #pausa p { color:#ccd3e6; max-width:480px; }
+  .res-ok { color:var(--ok); } .res-bad { color:var(--bad); }
+  .rev { padding:10px 0; border-bottom:1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- INICIO -->
+  <div id="inicio" class="card">
+    <h1>Prueba de Electrónica Básica</h1>
+    <p>10 preguntas de alternativas. Tiempo: <b id="minTxt"></b> minutos.</p>
+    <ul>
+      <li>La prueba se abre en pantalla completa.</li>
+      <li>Si sales de la pantalla completa o cambias de ventana, se registrará como una <b>salida</b>.</li>
+      <li>Con <b id="maxTxt"></b> salidas la prueba se cierra automáticamente.</li>
+    </ul>
+    <label for="nombre">Nombre completo:</label>
+    <input type="text" id="nombre" placeholder="Escribe tu nombre">
+    <button id="btnIniciar">Comenzar prueba</button>
+  </div>
+
+  <!-- PRUEBA -->
+  <div id="prueba" class="hidden">
+    <div class="card top">
+      <span id="alumno"></span>
+      <span>Tiempo: <span id="reloj">--:--</span></span>
+      <span>Salidas: <span id="salidas">0</span>/<span id="maxS"></span></span>
+    </div>
+    <div class="card">
+      <div id="preguntas"></div>
+      <button id="btnEnviar">Enviar prueba</button>
+    </div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div id="resultado" class="card hidden"></div>
+</div>
+
+<!-- PANTALLA DE PAUSA -->
+<div id="pausa" class="hidden">
+  <h1>⚠️ Prueba en pausa</h1>
+  <p>Saliste de la pantalla completa o de la ventana de la prueba. Esto quedó registrado.</p>
+  <p id="pausaInfo"></p>
+  <button id="btnVolver">Volver a la prueba</button>
+</div>
+
+<script>
+// ================= CONFIGURACIÓN =================
+const MINUTOS = 15;        // tiempo total
+const MAX_SALIDAS = 3;     // salidas permitidas antes de cerrar la prueba
+const BANCO = [
+  { q:"¿Cuál es la unidad de medida de la resistencia eléctrica?", o:["Voltio","Amperio","Ohmio","Watt"], c:2 },
+  { q:"¿Qué enuncia la Ley de Ohm?", o:["V = I × R","P = V + I","I = V × R","R = V × I"], c:0 },
+  { q:"¿Qué componente permite el paso de corriente en un solo sentido?", o:["Resistencia","Diodo","Capacitor","Bobina"], c:1 },
+  { q:"En un LED, ¿para qué se usa una resistencia en serie?", o:["Aumentar el brillo sin límite","Limitar la corriente y evitar que se queme","Almacenar energía","Cambiar su color"], c:1 },
+  { q:"¿Cuál es la unidad de medida de la corriente eléctrica?", o:["Ohmio","Voltio","Faradio","Amperio"], c:3 },
+  { q:"En un circuito en serie, la corriente que circula por cada componente es:", o:["Distinta en cada uno","La misma en todos","Cero","Depende del color"], c:1 },
+  { q:"¿Qué instrumento se usa para medir voltaje, corriente y resistencia?", o:["Osciloscopio","Protoboard","Multímetro","Soldador"], c:2 },
+  { q:"¿Qué componente almacena energía en un campo eléctrico?", o:["Capacitor","Resistencia","Diodo","Transistor"], c:0 },
+  { q:"Si un circuito tiene 12 V y 4 Ω de resistencia, ¿cuánta corriente circula?", o:["48 A","8 A","3 A","0,33 A"], c:2 },
+  { q:"¿Cuál es el pin que se conecta a la tierra en una fuente de 5 V?", o:["VCC","GND","VIN","TX"], c:1 }
+];
+// =================================================
+
+let preguntas = [], salidas = 0, activa = false, restante = MINUTOS*60, timer = null, log = [];
+const $ = id => document.getElementById(id);
+const mezclar = a => { a = a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+
+$("minTxt").textContent = MINUTOS; $("maxTxt").textContent = MAX_SALIDAS; $("maxS").textContent = MAX_SALIDAS;
+
+function pantallaCompleta(){
+  const el = document.documentElement;
+  try { if (el.requestFullscreen) return el.requestFullscreen().catch(()=>{}); } catch(e){}
+}
+const enFullscreen = () => !!document.fullscreenElement;
+
+$("btnIniciar").onclick = async () => {
+  const nombre = $("nombre").value.trim();
+  if(!nombre){ alert("Escribe tu nombre para comenzar."); return; }
+  await pantallaCompleta();
+  $("alumno").textContent = nombre;
+  // Preguntas y alternativas en orden aleatorio
+  preguntas = mezclar(BANCO).map(p => {
+    const idx = mezclar(p.o.map((_,i)=>i));
+    return { q:p.q, o:idx.map(i=>p.o[i]), c:idx.indexOf(p.c) };
+  });
+  dibujar();
+  $("inicio").classList.add("hidden");
+  $("prueba").classList.remove("hidden");
+  activa = true;
+  timer = setInterval(tick, 1000); tick();
+};
+
+function dibujar(){
+  $("preguntas").innerHTML = preguntas.map((p,i)=>`
+    <div class="q"><h3>${i+1}. ${p.q}</h3>
+    ${p.o.map((t,j)=>`<label class="opt"><input type="radio" name="p${i}" value="${j}"> ${t}</label>`).join("")}
+    </div>`).join("");
+}
+
+function tick(){
+  if(!activa) return;
+  restante--;
+  const m = String(Math.floor(restante/60)).padStart(2,"0"), s = String(restante%60).padStart(2,"0");
+  $("reloj").textContent = m+":"+s;
+  if(restante<=0) terminar("Se acabó el tiempo");
+}
+
+function registrarSalida(motivo){
+  if(!activa || !$("pausa").classList.contains("hidden")) return;
+  salidas++; log.push(new Date().toLocaleTimeString()+" - "+motivo);
+  $("salidas").textContent = salidas;
+  if(salidas >= MAX_SALIDAS){ terminar("Superaste el máximo de salidas permitidas"); return; }
+  $("pausaInfo").textContent = "Salida "+salidas+" de "+MAX_SALIDAS+". Con "+MAX_SALIDAS+" salidas la prueba se cierra.";
+  $("pausa").classList.remove("hidden");
+}
+
+$("btnVolver").onclick = async () => { await pantallaCompleta(); $("pausa").classList.add("hidden"); };
+
+document.addEventListener("fullscreenchange", () => { if(!enFullscreen()) registrarSalida("Salió de pantalla completa"); });
+document.addEventListener("visibilitychange", () => { if(document.hidden) registrarSalida("Cambió de pestaña/minimizó"); });
+window.addEventListener("blur", () => { if(activa) registrarSalida("Perdió el foco de la ventana"); });
+
+// Bloqueos básicos dentro de la página
+document.addEventListener("contextmenu", e => e.preventDefault());
+["copy","cut","paste"].forEach(ev => document.addEventListener(ev, e => { if(e.target.tagName!=="INPUT") e.preventDefault(); }));
+window.addEventListener("beforeunload", e => { if(activa){ e.preventDefault(); e.returnValue=""; } });
+
+$("btnEnviar").onclick = () => {
+  const sin = preguntas.filter((_,i)=>!document.querySelector(`input[name=p${i}]:checked`)).length;
+  if(sin && !confirm("Te faltan "+sin+" pregunta(s) sin responder. ¿Enviar de todos modos?")) return;
+  terminar("Enviada por el alumno");
+};
+
+function terminar(motivo){
+  if(!activa) return;
+  activa = false; clearInterval(timer);
+  let puntos = 0;
+  const rev = preguntas.map((p,i)=>{
+    const sel = document.querySelector(`input[name=p${i}]:checked`);
+    const resp = sel ? +sel.value : -1;
+    const ok = resp===p.c; if(ok) puntos++;
+    return `<div class="rev"><b>${i+1}. ${p.q}</b><br>
+      Tu respuesta: <span class="${ok?'res-ok':'res-bad'}">${resp>=0?p.o[resp]:"Sin responder"}</span>
+      ${ok?"":`<br>Correcta: <span class="res-ok">${p.o[p.c]}</span>`}</div>`;
+  }).join("");
+  const nota = (1 + 6*puntos/preguntas.length).toFixed(1); // escala 1.0 a 7.0
+  $("prueba").classList.add("hidden"); $("pausa").classList.add("hidden");
+  $("resultado").classList.remove("hidden");
+  $("resultado").innerHTML = `
+    <h1>Resultado</h1>
+    <p><b>${$("alumno").textContent}</b> — ${motivo}</p>
+    <h2>${puntos} / ${preguntas.length} correctas (nota ${nota})</h2>
+    <p>Salidas registradas: <b>${salidas}</b></p>
+    ${log.length?`<p>${log.join("<br>")}</p>`:""}
+    ${rev}`;
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+}
+</script>
+</body>
+</html>
